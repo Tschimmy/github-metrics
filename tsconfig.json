@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "lib": ["es2023", "esnext"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "diagnostics": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowJs": false,
+    "checkJs": false,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "target": "es2022",
+    "module": "commonjs",
+    "sourceMap": true,
+    "pretty": true,
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "paths": {
+      "~/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

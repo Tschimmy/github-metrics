@@ -1,0 +1,23 @@
+schema: https://docs.github.com/public/fpt/schema.docs.graphql
+documents: 'src/**/*.graphql'
+generates:
+  src/generated/graphql.ts:
+    plugins:
+      - add:
+          content: '/* eslint-disable */'
+      - typescript
+      - typescript-operations
+      - typescript-graphql-request
+    config:
+      avoidOptionals: false
+      maybeValue: T | null | undefined
+      skipTypename: false
+      enumsAsTypes: true
+      scalars:
+        DateTime: string
+        URI: string
+        GitObjectID: string
+        GitSSHRemote: string
+        HTML: string
+        PreciseDateTime: string
+        X509Certificate: string

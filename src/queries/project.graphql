@@ -1,0 +1,35 @@
+query GetProject($orgLogin: String!, $projectNumber: Int!) {
+  organization(login: $orgLogin) {
+    projectV2(number: $projectNumber) {
+      id
+      title
+      items(first: 50) {
+        nodes {
+          ... on ProjectV2Item {
+            __typename
+            content {
+              __typename
+              ... on Issue {
+                number
+                title
+                timelineItems(first: 50) {
+                  nodes {
+                    ... on ProjectV2ItemStatusChangedEvent {
+                      createdAt
+                      status
+                      previousStatus
+                      project {
+                        number
+                        title
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
