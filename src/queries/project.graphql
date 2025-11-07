@@ -1,9 +1,13 @@
-query GetProject($orgLogin: String!, $projectNumber: Int!) {
+query GetProject($orgLogin: String!, $projectNumber: Int!, $itemsAfter: String) {
   organization(login: $orgLogin) {
     projectV2(number: $projectNumber) {
       id
       title
-      items(first: 50) {
+      items(first: 50, after: $itemsAfter) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
         nodes {
           ... on ProjectV2Item {
             __typename
@@ -15,7 +19,7 @@ query GetProject($orgLogin: String!, $projectNumber: Int!) {
                 issueType {
                   name
                 }
-                timelineItems(first: 50) {
+                timelineItems(first: 100) {
                   nodes {
                     ... on ProjectV2ItemStatusChangedEvent {
                       createdAt

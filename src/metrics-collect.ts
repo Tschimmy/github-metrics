@@ -15,6 +15,21 @@ async function main() {
   const projectNumber = process.env.GITHUB_PROJECT_NUMBER
   const issueTypeFilter = process.env.ISSUE_TYPE?.trim().toLowerCase()
 
+  // Parse --since parameter from CLI args
+  const args = process.argv.slice(2)
+  const sinceIndex = args.indexOf('--since')
+  let sinceDate: Date | null = null
+
+  if (sinceIndex !== -1 && args[sinceIndex + 1]) {
+    const dateStr = args[sinceIndex + 1]
+    sinceDate = new Date(dateStr)
+    if (isNaN(sinceDate.getTime())) {
+      console.error(`Error: Invalid date format "${dateStr}"`)
+      console.error('Use ISO format: YYYY-MM-DD (e.g., 2024-01-01)')
+      process.exit(1)
+    }
+  }
+
   if (!token) {
     console.error('Error: GITHUB_TOKEN not found in environment variables')
     console.error('Copy .env.example to .env and add your GitHub token')
@@ -39,103 +54,121 @@ async function main() {
     console.log('Collecting metrics...')
     console.log(`Organization: ${orgLogin}`)
     console.log(`Project Number: ${projectNumber}`)
-    console.log(`Issue Type Filter: ${issueTypeFilter || 'all'}\n`)
+    console.log(`Issue Type Filter: ${issueTypeFilter || 'all'}`)
+    console.log(`History Since: ${sinceDate ? sinceDate.toISOString().split('T')[0] : 'all'}\n`)
 
     const runAt = new Date().toISOString()
     let issuesProcessed = 0
     let changesDetected = 0
 
-    const data: GetProjectQuery = await client.request(GetProjectDocument, {
-      orgLogin,
-      projectNumber: projectNum,
-    })
+    // Paginate through all items
+    let itemsCursor: string | null = null
+    let hasNextPage = true
 
-    const items = data.organization?.projectV2?.items.nodes || []
-
-    for (const item of items) {
-      if (!item || item.__typename !== 'ProjectV2Item') continue
-
-      const content = item.content
-      if (!content || content.__typename !== 'Issue') continue
-
-      // Filter by issue type if specified
-      if (issueTypeFilter) {
-        const issueTypeName = content.issueType?.name?.toLowerCase()
-        if (issueTypeName !== issueTypeFilter) continue
-      }
-
-      const timelineNodes = content.timelineItems.nodes || []
-      const events: TimelineEvent[] = timelineNodes
-        .filter((node): node is any =>
-          node != null &&
-          typeof node === 'object' &&
-          'createdAt' in node &&
-          'status' in node
-        )
-        .map(node => ({
-          createdAt: node.createdAt,
-          status: node.status,
-          previousStatus: node.previousStatus,
-          project: node.project,
-        }))
-
-      // Filter events for this project only
-      const projectEvents = events.filter(e => e.project?.number === projectNum)
-      if (projectEvents.length === 0) continue
-
-      issuesProcessed++
-
-      // Parse timeline into state transitions
-      const sortedEvents = [...projectEvents].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      )
-
-      // Determine current state
-      const currentState = sortedEvents.length > 0
-        ? sortedEvents[sortedEvents.length - 1].status
-        : null
-
-      // Upsert issue
-      repo.upsertIssue({
-        issueNumber: content.number,
-        issueTitle: content.title,
-        issueType: content.issueType?.name || null,
+    while (hasNextPage) {
+      const data: GetProjectQuery = await client.request(GetProjectDocument, {
+        orgLogin,
         projectNumber: projectNum,
-        currentState,
-        lastSyncedAt: runAt,
+        itemsAfter: itemsCursor,
       })
 
-      // Get existing state history from DB
-      const existingHistory = repo.getStateHistory(content.number)
-      const existingMap = new Map(
-        existingHistory.map(h => [`${h.stateName}:${h.enteredAt}`, h])
-      )
+      const itemsData = data.organization?.projectV2?.items
+      const items = itemsData?.nodes || []
+      hasNextPage = itemsData?.pageInfo?.hasNextPage || false
+      itemsCursor = itemsData?.pageInfo?.endCursor || null
 
-      // Process each state transition
-      for (let i = 0; i < sortedEvents.length; i++) {
-        const event = sortedEvents[i]
-        const nextEvent = sortedEvents[i + 1]
+      console.log(`Fetched ${items.length} items (cursor: ${itemsCursor || 'none'})`)
 
-        const enteredAt = event.createdAt
-        const exitedAt = nextEvent ? nextEvent.createdAt : null
-        const stateName = event.status
-        const key = `${stateName}:${enteredAt}`
+      for (const item of items) {
+        if (!item || item.__typename !== 'ProjectV2Item') continue
 
-        const duration = repo.calculateDuration(enteredAt, exitedAt)
+        const content = item.content
+        if (!content || content.__typename !== 'Issue') continue
 
-        const existing = existingMap.get(key)
+        // Filter by issue type if specified
+        if (issueTypeFilter) {
+          const issueTypeName = content.issueType?.name?.toLowerCase()
+          if (issueTypeName !== issueTypeFilter) continue
+        }
 
-        // Check if needs update
-        if (!existing || existing.exitedAt !== exitedAt) {
-          changesDetected++
-          repo.upsertStateHistory({
-            issueNumber: content.number,
-            stateName,
-            enteredAt,
-            exitedAt,
-            durationDays: duration,
-            recordedAt: runAt,
-          })
+        const timelineNodes = content.timelineItems.nodes || []
+        let events: TimelineEvent[] = timelineNodes
+          .filter((node): node is any =>
+            node != null &&
+            typeof node === 'object' &&
+            'createdAt' in node &&
+            'status' in node
+          )
+          .map(node => ({
+            createdAt: node.createdAt,
+            status: node.status,
+            previousStatus: node.previousStatus,
+            project: node.project,
+          }))
+
+        // Filter by since date if specified
+        if (sinceDate) {
+          events = events.filter(e => new Date(e.createdAt) >= sinceDate)
+        }
+
+        // Filter events for this project only
+        const projectEvents = events.filter(e => e.project?.number === projectNum)
+        if (projectEvents.length === 0) continue
+
+        issuesProcessed++
+
+        // Parse timeline into state transitions
+        const sortedEvents = [...projectEvents].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        )
+
+        // Determine current state
+        const currentState = sortedEvents.length > 0
+          ? sortedEvents[sortedEvents.length - 1].status
+          : null
+
+        // Upsert issue
+        repo.upsertIssue({
+          issueNumber: content.number,
+          issueTitle: content.title,
+          issueType: content.issueType?.name || null,
+          projectNumber: projectNum,
+          currentState,
+          lastSyncedAt: runAt,
+        })
+
+        // Get existing state history from DB
+        const existingHistory = repo.getStateHistory(content.number)
+        const existingMap = new Map(
+          existingHistory.map(h => [`${h.stateName}:${h.enteredAt}`, h])
+        )
+
+        // Process each state transition
+        for (let i = 0; i < sortedEvents.length; i++) {
+          const event = sortedEvents[i]
+          const nextEvent = sortedEvents[i + 1]
+
+          const enteredAt = event.createdAt
+          const exitedAt = nextEvent ? nextEvent.createdAt : null
+          const stateName = event.status
+          const key = `${stateName}:${enteredAt}`
+
+          const duration = repo.calculateDuration(enteredAt, exitedAt)
+
+          const existing = existingMap.get(key)
+
+          // Check if needs update
+          if (!existing || existing.exitedAt !== exitedAt) {
+            changesDetected++
+            repo.upsertStateHistory({
+              issueNumber: content.number,
+              stateName,
+              enteredAt,
+              exitedAt,
+              durationDays: duration,
+              recordedAt: runAt,
+            })
+          }
         }
       }
     }
