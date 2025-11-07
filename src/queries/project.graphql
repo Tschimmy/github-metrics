@@ -12,6 +12,9 @@ query GetProject($orgLogin: String!, $projectNumber: Int!) {
               ... on Issue {
                 number
                 title
+                issueType {
+                  name
+                }
                 timelineItems(first: 50) {
                   nodes {
                     ... on ProjectV2ItemStatusChangedEvent {

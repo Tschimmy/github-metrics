@@ -9,6 +9,9 @@
   },
   "scripts": {
     "dev": "ts-node -r dotenv/config src/index.ts",
+    "metrics:collect": "ts-node -r dotenv/config src/metrics-collect.ts",
+    "metrics:export": "ts-node -r dotenv/config src/metrics-export.ts",
+    "metrics:run": "ts-node -r dotenv/config src/metrics-run.ts",
     "build": "tsc",
     "codegen": "graphql-codegen --config codegen.yml",
     "codegen:watch": "graphql-codegen --config codegen.yml --watch",
@@ -23,6 +26,7 @@
     "@graphql-codegen/typescript": "^4.1.6",
     "@graphql-codegen/typescript-graphql-request": "^6.2.1",
     "@graphql-codegen/typescript-operations": "^4.6.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@typescript-eslint/eslint-plugin": "^6.18.0",
     "@typescript-eslint/parser": "^6.18.0",
     "eslint": "^8.56.0",
@@ -37,6 +41,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "better-sqlite3": "^12.4.1",
     "dotenv": "^16.5.0",
     "graphql": "^16.8.1",
     "graphql-request": "^6.1.0",
