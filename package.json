@@ -12,6 +12,7 @@
     "metrics:collect": "ts-node -r dotenv/config src/metrics-collect.ts",
     "metrics:export": "ts-node -r dotenv/config src/metrics-export.ts",
     "metrics:run": "ts-node -r dotenv/config src/metrics-run.ts",
+    "metrics:analyze": "ts-node -r dotenv/config src/metrics-analyze.ts",
     "build": "tsc",
     "codegen": "graphql-codegen --config codegen.yml",
     "codegen:watch": "graphql-codegen --config codegen.yml --watch",
@@ -42,6 +43,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",
+    "cli-chart": "^0.3.1",
     "dotenv": "^16.5.0",
     "graphql": "^16.8.1",
     "graphql-request": "^6.1.0",
