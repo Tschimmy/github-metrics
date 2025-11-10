@@ -85,6 +85,18 @@ async function main() {
         const content = item.content
         if (!content || content.__typename !== 'Issue') continue
 
+        // Extract lane field value and map emojis to text
+        const laneField = item.fieldValueByName
+        const laneEmoji = laneField && 'name' in laneField ? laneField.name : null
+
+        // Map emoji to text values
+        const laneMap: Record<string, string> = {
+          '📅': 'fixed date',
+          '🏊': 'intangible',
+          '🏃': 'standard'
+        }
+        const lane = laneEmoji ? (laneMap[laneEmoji] || laneEmoji) : null
+
         // Filter by issue type if specified
         if (issueTypeFilter) {
           const issueTypeName = content.issueType?.name?.toLowerCase()
@@ -113,7 +125,9 @@ async function main() {
 
         // Filter events for this project only
         const projectEvents = events.filter(e => e.project?.number === projectNum)
-        if (projectEvents.length === 0) continue
+
+        // Skip if no events AND no lane data (completely unrelated to project)
+        if (projectEvents.length === 0 && !lane) continue
 
         issuesProcessed++
 
@@ -134,6 +148,7 @@ async function main() {
           issueType: content.issueType?.name || null,
           projectNumber: projectNum,
           currentState,
+          lane,
           lastSyncedAt: runAt,
         })
 

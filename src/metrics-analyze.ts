@@ -29,21 +29,23 @@ async function main() {
   const args = process.argv.slice(2)
   const startIndex = args.indexOf('--start')
   const endIndex = args.indexOf('--end')
+  const laneIndex = args.indexOf('--lane')
 
   if (startIndex === -1 || !args[startIndex + 1]) {
     console.error('Error: --start date is required')
-    console.error('Usage: yarn metrics:analyze --start YYYY-MM-DD --end YYYY-MM-DD')
+    console.error('Usage: yarn metrics:analyze --start YYYY-MM-DD --end YYYY-MM-DD [--lane LANE]')
     process.exit(1)
   }
 
   if (endIndex === -1 || !args[endIndex + 1]) {
     console.error('Error: --end date is required')
-    console.error('Usage: yarn metrics:analyze --start YYYY-MM-DD --end YYYY-MM-DD')
+    console.error('Usage: yarn metrics:analyze --start YYYY-MM-DD --end YYYY-MM-DD [--lane LANE]')
     process.exit(1)
   }
 
   const startDate = parseDate(args[startIndex + 1])
   const endDate = parseDate(args[endIndex + 1])
+  const laneFilter = laneIndex !== -1 && args[laneIndex + 1] ? args[laneIndex + 1] : null
 
   if (startDate >= endDate) {
     console.error('Error: --start date must be before --end date')
@@ -70,20 +72,35 @@ async function main() {
 
     console.log(`\nPhase Duration Analysis`)
     console.log(`${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`)
+    if (laneFilter) {
+      console.log(`Lane: ${laneFilter}`)
+    }
     console.log('━'.repeat(60))
     console.log()
 
     // Query state history within date range
     const allHistory = repo.getAllStateHistory()
+    const allIssues = repo.getAllIssues()
 
-    // Filter by date range (check if state was active during the period)
+    // Create issue map for lane filtering
+    const issueMap = new Map(allIssues.map(i => [i.issueNumber, i]))
+
+    // Filter by date range and lane (check if state was active during the period)
     const filteredHistory = allHistory.filter(h => {
       const entered = new Date(h.enteredAt)
       const exited = h.exitedAt ? new Date(h.exitedAt) : new Date()
 
       // State overlaps with our date range if:
       // entered <= endDate AND (exited >= startDate OR exited is null)
-      return entered <= endDate && exited >= startDate
+      const inDateRange = entered <= endDate && exited >= startDate
+
+      // Filter by lane if specified
+      if (laneFilter) {
+        const issue = issueMap.get(h.issueNumber)
+        return inDateRange && issue?.lane === laneFilter
+      }
+
+      return inDateRange
     })
 
     if (filteredHistory.length === 0) {

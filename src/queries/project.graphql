@@ -11,6 +11,11 @@ query GetProject($orgLogin: String!, $projectNumber: Int!, $itemsAfter: String) 
         nodes {
           ... on ProjectV2Item {
             __typename
+            fieldValueByName(name: "Lane") {
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+              }
+            }
             content {
               __typename
               ... on Issue {
