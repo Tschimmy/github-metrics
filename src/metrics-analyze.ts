@@ -31,26 +31,31 @@ async function main() {
   const endIndex = args.indexOf('--end')
   const laneIndex = args.indexOf('--lane')
 
-  if (startIndex === -1 || !args[startIndex + 1]) {
-    console.error('Error: --start date is required')
-    console.error('Usage: yarn metrics:analyze --start YYYY-MM-DD --end YYYY-MM-DD [--lane LANE]')
+  let startDate: Date | null = null
+  let endDate: Date | null = null
+
+  // Dates are optional now - if not provided, analyze all data
+  if (startIndex !== -1 && args[startIndex + 1]) {
+    startDate = parseDate(args[startIndex + 1])
+  }
+
+  if (endIndex !== -1 && args[endIndex + 1]) {
+    endDate = parseDate(args[endIndex + 1])
+  }
+
+  // If one date is provided, both must be provided
+  if ((startDate && !endDate) || (!startDate && endDate)) {
+    console.error('Error: Both --start and --end dates must be provided together')
+    console.error('Usage: yarn metrics:analyze [--start YYYY-MM-DD --end YYYY-MM-DD] [--lane LANE]')
     process.exit(1)
   }
 
-  if (endIndex === -1 || !args[endIndex + 1]) {
-    console.error('Error: --end date is required')
-    console.error('Usage: yarn metrics:analyze --start YYYY-MM-DD --end YYYY-MM-DD [--lane LANE]')
-    process.exit(1)
-  }
-
-  const startDate = parseDate(args[startIndex + 1])
-  const endDate = parseDate(args[endIndex + 1])
-  const laneFilter = laneIndex !== -1 && args[laneIndex + 1] ? args[laneIndex + 1] : null
-
-  if (startDate >= endDate) {
+  if (startDate && endDate && startDate >= endDate) {
     console.error('Error: --start date must be before --end date')
     process.exit(1)
   }
+
+  const laneFilter = laneIndex !== -1 && args[laneIndex + 1] ? args[laneIndex + 1] : null
 
   // Load workflow state order from env
   const workflowStatesEnv = process.env.WORKFLOW_STATES || ''
@@ -71,7 +76,11 @@ async function main() {
     const repo = new MetricsRepository(db)
 
     console.log(`\nPhase Duration Analysis`)
-    console.log(`${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`)
+    if (startDate && endDate) {
+      console.log(`${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`)
+    } else {
+      console.log(`All time`)
+    }
     if (laneFilter) {
       console.log(`Lane: ${laneFilter}`)
     }
@@ -87,12 +96,16 @@ async function main() {
 
     // Filter by date range and lane (check if state was active during the period)
     const filteredHistory = allHistory.filter(h => {
-      const entered = new Date(h.enteredAt)
-      const exited = h.exitedAt ? new Date(h.exitedAt) : new Date()
+      // Filter by date range if provided
+      let inDateRange = true
+      if (startDate && endDate) {
+        const entered = new Date(h.enteredAt)
+        const exited = h.exitedAt ? new Date(h.exitedAt) : new Date()
 
-      // State overlaps with our date range if:
-      // entered <= endDate AND (exited >= startDate OR exited is null)
-      const inDateRange = entered <= endDate && exited >= startDate
+        // State overlaps with our date range if:
+        // entered <= endDate AND (exited >= startDate OR exited is null)
+        inDateRange = entered <= endDate && exited >= startDate
+      }
 
       // Filter by lane if specified
       if (laneFilter) {
